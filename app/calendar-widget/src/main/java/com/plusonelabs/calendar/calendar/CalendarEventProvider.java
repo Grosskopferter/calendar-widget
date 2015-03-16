@@ -14,6 +14,7 @@ import com.plusonelabs.calendar.DateUtil;
 import com.plusonelabs.calendar.prefs.CalendarPreferences;
 
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeConstants;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDateTime;
 
@@ -36,11 +37,24 @@ public class CalendarEventProvider {
     private static final String OR = " OR ";
     private static final String EQUALS = " = ";
     private static final String AND_BRACKET = " AND (";
+    private static final int COMPANY_COLOR = -21178;
 
     private final Context context;
     private KeywordsFilter mKeywordsFilter;
     private DateTime mStartOfTimeRange;
     private DateTime mEndOfTimeRange;
+
+    private enum ShowPastEventsWithColorEnum {
+        NONE,
+        SAME,
+        OTHER
+    }
+
+    /**
+     * This helps migrating to the "Calendar Widget" from "Jorte Calendar",
+     * where "[C]" title suffix means "Completed event"
+     */
+    private static final String PAST_EVENTS_TITLE_SUFFIX_TO_SKIP = "[C]";
 
     public CalendarEventProvider(Context context) {
         this.context = context;
@@ -133,8 +147,10 @@ public class CalendarEventProvider {
                         result.addRow(cursor);
                     }
                     CalendarEvent event = createCalendarEvent(cursor);
-                    if (!eventList.contains(event) && !mKeywordsFilter.matched(event.getTitle())) {
-                        eventList.add(event);
+                    if (!isWeptunEventOnWeekend(event)) {
+                        if (!eventList.contains(event) && !mKeywordsFilter.matched(event.getTitle())) {
+                            eventList.add(event);
+                        }
                     }
                 }
             }
@@ -145,6 +161,10 @@ public class CalendarEventProvider {
         }
         CalendarQueryResultsStorage.store(result);
         return eventList;
+    }
+
+    private boolean isWeptunEventOnWeekend(CalendarEvent event) {
+        return event.getColor() == COMPANY_COLOR && isWeekend();
     }
 
     public static String[] getProjection() {
@@ -211,6 +231,13 @@ public class CalendarEventProvider {
             fixAllDayEvent(event);
         }
         return event;
+    }
+
+
+    private boolean isWeekend() {
+        DateTime now = new DateTime();
+        return now.getDayOfWeek() == DateTimeConstants.SUNDAY || now.getDayOfWeek() == DateTimeConstants.SATURDAY
+                || (now.getDayOfWeek() == DateTimeConstants.FRIDAY && now.getHourOfDay() > 17);
     }
 
     private void fixAllDayEvent(CalendarEvent event) {
