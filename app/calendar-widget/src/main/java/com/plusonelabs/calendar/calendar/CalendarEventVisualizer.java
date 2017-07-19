@@ -1,19 +1,16 @@
 package com.plusonelabs.calendar.calendar;
 
 import android.content.Context;
-import android.content.Intent;
-import android.content.SharedPreferences;
-import android.preference.PreferenceManager;
-import android.text.TextUtils;
+import android.support.annotation.NonNull;
 import android.view.View;
 import android.widget.RemoteViews;
 
-import com.plusonelabs.calendar.CalendarIntentUtil;
 import com.plusonelabs.calendar.DateUtil;
 import com.plusonelabs.calendar.IEventVisualizer;
 import com.plusonelabs.calendar.R;
-import com.plusonelabs.calendar.prefs.CalendarPreferences;
+import com.plusonelabs.calendar.prefs.InstanceSettings;
 import com.plusonelabs.calendar.widget.CalendarEntry;
+import com.plusonelabs.calendar.widget.EventEntryLayout;
 import com.plusonelabs.calendar.widget.WidgetEntry;
 
 import org.joda.time.DateTime;
@@ -25,67 +22,39 @@ import java.util.List;
 import static com.plusonelabs.calendar.RemoteViewsUtil.setAlpha;
 import static com.plusonelabs.calendar.RemoteViewsUtil.setBackgroundColor;
 import static com.plusonelabs.calendar.RemoteViewsUtil.setImageFromAttr;
-import static com.plusonelabs.calendar.RemoteViewsUtil.setSingleLine;
-import static com.plusonelabs.calendar.RemoteViewsUtil.setTextColorFromAttr;
-import static com.plusonelabs.calendar.RemoteViewsUtil.setTextSize;
-import static com.plusonelabs.calendar.Theme.getCurrentThemeId;
-import static com.plusonelabs.calendar.prefs.CalendarPreferences.PREF_ENTRY_THEME;
-import static com.plusonelabs.calendar.prefs.CalendarPreferences.PREF_ENTRY_THEME_DEFAULT;
-import static com.plusonelabs.calendar.prefs.CalendarPreferences.PREF_INDICATE_ALERTS;
-import static com.plusonelabs.calendar.prefs.CalendarPreferences.PREF_INDICATE_RECURRING;
-import static com.plusonelabs.calendar.prefs.CalendarPreferences.PREF_MULTILINE_TITLE;
-import static com.plusonelabs.calendar.prefs.CalendarPreferences.PREF_MULTILINE_TITLE_DEFAULT;
+import static com.plusonelabs.calendar.Theme.themeNameToResId;
 
 public class CalendarEventVisualizer implements IEventVisualizer<CalendarEntry> {
-	private final Context context;
-	private final CalendarEventProvider calendarContentProvider;
-	private final SharedPreferences prefs;
 
-    public CalendarEventVisualizer(Context context) {
-		this.context = context;
-		calendarContentProvider = new CalendarEventProvider(context);
-		prefs = PreferenceManager.getDefaultSharedPreferences(context);
-	}
+    private final Context context;
+    private final int widgetId;
+    private final CalendarEventProvider calendarContentProvider;
 
-	public RemoteViews getRemoteView(WidgetEntry eventEntry) {
-		CalendarEntry event = (CalendarEntry) eventEntry;
-		RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.event_entry);
-		rv.setOnClickFillInIntent(R.id.event_entry, createOnItemClickIntent(event.getEvent()));
-        setTitle(event, rv);
-		setEventDetails(event, rv);
-		setAlarmActive(event, rv);
-        setRecurring(event, rv);
-		setColor(event, rv);
-		return rv;
-	}
-
-	private void setTitle(CalendarEntry event, RemoteViews rv) {
-		rv.setTextViewText(R.id.event_entry_title, event.getTitle(context));
-		setTextSize(context, rv, R.id.event_entry_title, R.dimen.event_entry_title);
-        setTextColorFromAttr(context, rv, R.id.event_entry_title, R.attr.eventEntryTitle);
-        setSingleLine(rv, R.id.event_entry_title,
-                !prefs.getBoolean(PREF_MULTILINE_TITLE, PREF_MULTILINE_TITLE_DEFAULT));
+    public CalendarEventVisualizer(Context context, int widgetId) {
+        this.context = context;
+        this.widgetId = widgetId;
+        calendarContentProvider = new CalendarEventProvider(context, widgetId);
     }
 
-	private void setEventDetails(CalendarEntry entry, RemoteViews rv) {
-        String eventDetails = entry.getEventDetails(context);
-        if (TextUtils.isEmpty(eventDetails)) {
-            rv.setViewVisibility(R.id.event_entry_details, View.GONE);
-        } else {
-            rv.setViewVisibility(R.id.event_entry_details, View.VISIBLE);
-            rv.setTextViewText(R.id.event_entry_details, eventDetails);
-            setTextSize(context, rv, R.id.event_entry_details, R.dimen.event_entry_details);
-            setTextColorFromAttr(context, rv, R.id.event_entry_details, R.attr.eventEntryDetails);
-        }
+    public RemoteViews getRemoteView(WidgetEntry eventEntry) {
+        CalendarEntry entry = (CalendarEntry) eventEntry;
+        EventEntryLayout eventEntryLayout = getSettings().getEventEntryLayout();
+        RemoteViews rv = new RemoteViews(context.getPackageName(), eventEntryLayout.layoutId);
+        rv.setOnClickFillInIntent(R.id.event_entry, entry.getEvent().createOpenCalendarEventIntent());
+        eventEntryLayout.visualizeEvent(entry, rv);
+        setAlarmActive(entry, rv);
+        setRecurring(entry, rv);
+        setColor(entry, rv);
+        return rv;
     }
 
     private void setAlarmActive(CalendarEntry entry, RemoteViews rv) {
-        boolean showIndication = entry.isAlarmActive() && prefs.getBoolean(PREF_INDICATE_ALERTS, true);
+        boolean showIndication = entry.isAlarmActive() && getSettings().getIndicateAlerts();
         setIndicator(rv, showIndication, R.id.event_entry_indicator_alarm, R.attr.eventEntryAlarm);
-	}
+    }
 
-	private void setRecurring(CalendarEntry entry, RemoteViews rv) {
-        boolean showIndication = entry.isRecurring() && prefs.getBoolean(PREF_INDICATE_RECURRING, false);
+    private void setRecurring(CalendarEntry entry, RemoteViews rv) {
+        boolean showIndication = entry.isRecurring() && getSettings().getIndicateRecurring();
         setIndicator(rv, showIndication, R.id.event_entry_indicator_recurring, R.attr.eventEntryRecurring);
     }
 
@@ -93,7 +62,7 @@ public class CalendarEventVisualizer implements IEventVisualizer<CalendarEntry> 
         if (showIndication) {
             rv.setViewVisibility(viewId, View.VISIBLE);
             setImageFromAttr(context, rv, viewId, imageAttrId);
-            int themeId = getCurrentThemeId(context, PREF_ENTRY_THEME, PREF_ENTRY_THEME_DEFAULT);
+            int themeId = themeNameToResId(getSettings().getEntryTheme());
             int alpha = 255;
             if (themeId == R.style.Theme_Calendar_Dark || themeId == R.style.Theme_Calendar_Light) {
                 alpha = 128;
@@ -106,30 +75,30 @@ public class CalendarEventVisualizer implements IEventVisualizer<CalendarEntry> 
 
     private void setColor(CalendarEntry entry, RemoteViews rv) {
         setBackgroundColor(rv, R.id.event_entry_color, entry.getColor());
-        if (entry.getEndDate().isBefore(DateUtil.now())) {
-            setBackgroundColor(rv, R.id.event_entry, CalendarPreferences.getPastEventsBackgroundColor(context));
+        if (entry.getEndDate().isBefore(DateUtil.now(entry.getEndDate().getZone()))) {
+            setBackgroundColor(rv, R.id.event_entry, getSettings().getPastEventsBackgroundColor());
         } else {
             setBackgroundColor(rv, R.id.event_entry, 0);
         }
     }
 
-    private Intent createOnItemClickIntent(CalendarEvent event) {
-		return CalendarIntentUtil.createOpenCalendarEventIntent(event.getEventId(),
-                event.getStartDate(), event.getEndDate());
-	}
+    @NonNull
+    private InstanceSettings getSettings() {
+        return InstanceSettings.fromId(context, widgetId);
+    }
 
     public int getViewTypeCount() {
         return 1;
-	}
+    }
 
-	public List<CalendarEntry> getEventEntries() {
+    public List<CalendarEntry> getEventEntries() {
         List<CalendarEntry> entries = createEntryList(calendarContentProvider.getEvents());
         Collections.sort(entries);
         return entries;
-	}
+    }
 
     private List<CalendarEntry> createEntryList(List<CalendarEvent> eventList) {
-        boolean fillAllDayEvents = CalendarPreferences.getFillAllDayEvents(context);
+        boolean fillAllDayEvents = getSettings().getFillAllDayEvents();
         List<CalendarEntry> entryList = new ArrayList<>();
         for (CalendarEvent event : eventList) {
             CalendarEntry dayOneEntry = setupDayOneEntry(entryList, event);
@@ -152,7 +121,7 @@ public class CalendarEventVisualizer implements IEventVisualizer<CalendarEntry> 
                 firstDate = dayOfStartOfTimeRange;
             }
         }
-        DateTime today = DateUtil.now().withTimeAtStartOfDay();
+        DateTime today = DateUtil.now(event.getStartDate().getZone()).withTimeAtStartOfDay();
         if (event.isActive() && firstDate.isBefore(today)) {
             firstDate = today;
         }
@@ -185,8 +154,8 @@ public class CalendarEventVisualizer implements IEventVisualizer<CalendarEntry> 
         }
     }
 
-	public Class<? extends CalendarEntry> getSupportedEventEntryType() {
-		return CalendarEntry.class;
-	}
+    public Class<? extends CalendarEntry> getSupportedEventEntryType() {
+        return CalendarEntry.class;
+    }
 
 }

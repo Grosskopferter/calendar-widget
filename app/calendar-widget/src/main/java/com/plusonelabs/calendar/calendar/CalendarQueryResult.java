@@ -3,9 +3,10 @@ package com.plusonelabs.calendar.calendar;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.net.Uri;
-import android.util.Log;
+import android.text.TextUtils;
 
 import com.plusonelabs.calendar.DateUtil;
+import com.plusonelabs.calendar.prefs.InstanceSettings;
 
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -19,9 +20,11 @@ import java.util.List;
 
 /**
  * Useful for logging and mocking CalendarContentProvider
+ *
  * @author yvolk@yurivolkov.com
  */
 public class CalendarQueryResult {
+
     private static final String TAG = CalendarQueryResult.class.getSimpleName();
     private static final String KEY_ROWS = "rows";
     private static final String KEY_EXECUTED_AT = "executedAt";
@@ -35,6 +38,7 @@ public class CalendarQueryResult {
     private static final String KEY_SORT_ORDER = "sortOrder";
 
     private final DateTime executedAt;
+    private final int widgetId;
     private Uri uri = Uri.EMPTY;
     private String[] projection = {};
     private String selection = "";
@@ -42,8 +46,9 @@ public class CalendarQueryResult {
     private String sortOrder = "";
     private final List<CalendarQueryRow> rows = new ArrayList<>();
 
-    public CalendarQueryResult (Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
-        this(DateUtil.now());
+    public CalendarQueryResult(InstanceSettings settings, Uri uri, String[] projection, String selection,
+                               String[] selectionArgs, String sortOrder) {
+        this(settings.getWidgetId(), DateUtil.now(settings.getTimeZone()));
         this.uri = uri;
         this.projection = projection;
         this.selection = selection;
@@ -51,12 +56,14 @@ public class CalendarQueryResult {
         this.sortOrder = sortOrder;
     }
 
-    CalendarQueryResult(DateTime executedAt) {
+    CalendarQueryResult(int widgetId, DateTime executedAt) {
+        this.widgetId = widgetId;
         this.executedAt = executedAt;
     }
 
-    public static CalendarQueryResult fromJson(JSONObject json) throws JSONException {
-        CalendarQueryResult result = new CalendarQueryResult(new DateTime(json.getLong(KEY_EXECUTED_AT), dateTimeZoneFromJson(json)));
+    public static CalendarQueryResult fromJson(JSONObject json, int widgetId) throws JSONException {
+        CalendarQueryResult result = new CalendarQueryResult(widgetId,
+                new DateTime(json.getLong(KEY_EXECUTED_AT), dateTimeZoneFromJson(json)));
         result.uri = Uri.parse(json.getString(KEY_URI));
         result.projection = jsonToArrayOfStings(json.getJSONArray(KEY_PROJECTION));
         result.selection = json.getString(KEY_SELECTION);
@@ -65,7 +72,7 @@ public class CalendarQueryResult {
 
         JSONArray jsonArray = json.getJSONArray(KEY_ROWS);
         if (jsonArray != null) {
-            for (int ind=0; ind < jsonArray.length(); ind++) {
+            for (int ind = 0; ind < jsonArray.length(); ind++) {
                 result.addRow(CalendarQueryRow.fromJson(jsonArray.getJSONObject(ind)));
             }
         }
@@ -73,27 +80,22 @@ public class CalendarQueryResult {
     }
 
     static DateTimeZone dateTimeZoneFromJson(JSONObject json) {
-        String zoneId = json.optString(KEY_TIME_ZONE_ID);
-        DateTimeZone zone = null;
-        try {
-            zone = DateTimeZone.forID(zoneId);
-        } catch (IllegalArgumentException e) {
-            Log.i(TAG, "Unknown timezone id:" + zoneId);
-        }
-        if (zone == null) {
-            zone = DateTimeZone.forID("UTC");
-        }
-        return zone;
+        String zoneId = DateUtil.validatedTimeZoneId(json.optString(KEY_TIME_ZONE_ID));
+        return DateTimeZone.forID(TextUtils.isEmpty(zoneId) ? "UTC" : zoneId);
     }
 
     private static String[] jsonToArrayOfStings(JSONArray jsonArray) throws JSONException {
-        String[] array = new String[ jsonArray != null ? jsonArray.length() : 0];
+        String[] array = new String[jsonArray != null ? jsonArray.length() : 0];
         if (jsonArray != null) {
-            for (int ind=0; ind < jsonArray.length(); ind++) {
+            for (int ind = 0; ind < jsonArray.length(); ind++) {
                 array[ind] = jsonArray.getString(ind);
             }
         }
         return array;
+    }
+
+    public int getWidgetId() {
+        return widgetId;
     }
 
     public DateTime getExecutedAt() {
@@ -141,7 +143,7 @@ public class CalendarQueryResult {
         if (!Arrays.equals(selectionArgs, that.selectionArgs)) return false;
         if (!sortOrder.equals(that.sortOrder)) return false;
         if (rows.size() != that.rows.size()) return false;
-        for (int ind=0; ind < rows.size(); ind++) {
+        for (int ind = 0; ind < rows.size(); ind++) {
             if (!rows.get(ind).equals(that.rows.get(ind))) {
                 return false;
             }
@@ -157,7 +159,7 @@ public class CalendarQueryResult {
         result = 31 * result + selection.hashCode();
         result = 31 * result + (selectionArgs != null ? Arrays.hashCode(selectionArgs) : 0);
         result = 31 * result + sortOrder.hashCode();
-        for (int ind=0; ind < rows.size(); ind++) {
+        for (int ind = 0; ind < rows.size(); ind++) {
             result = 31 * result + rows.get(ind).hashCode();
         }
         return result;

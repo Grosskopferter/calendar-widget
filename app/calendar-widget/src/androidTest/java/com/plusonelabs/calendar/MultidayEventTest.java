@@ -14,6 +14,7 @@ import org.joda.time.DateTime;
  * @author yvolk@yurivolkov.com
  */
 public class MultidayEventTest extends InstrumentationTestCase {
+
     private static final String TAG = MultidayEventTest.class.getSimpleName();
     private static final String ARROW = "→";
 
@@ -25,7 +26,7 @@ public class MultidayEventTest extends InstrumentationTestCase {
     protected void setUp() throws Exception {
         super.setUp();
         provider = MockCalendarContentProvider.getContentProvider(this);
-        factory = new EventRemoteViewsFactory(provider.getContext());
+        factory = new EventRemoteViewsFactory(provider.getContext(), provider.getWidgetId());
         assertTrue(factory.getWidgetEntries().isEmpty());
     }
 
@@ -35,10 +36,13 @@ public class MultidayEventTest extends InstrumentationTestCase {
         super.tearDown();
     }
 
-    /** Issue #206 https://github.com/plusonelabs/calendar-widget/issues/206 */
+    /**
+     * Issue #206 https://github.com/plusonelabs/calendar-widget/issues/206
+     */
     public void testEventWhichCarryOverToTheNextDay() {
-        DateTime today = DateUtil.now().withTimeAtStartOfDay();
-        CalendarEvent event = new CalendarEvent();
+        DateTime today = DateUtil.now(provider.getSettings().getTimeZone()).withTimeAtStartOfDay();
+        CalendarEvent event = new CalendarEvent(provider.getContext(), provider.getWidgetId(),
+                provider.getSettings().getTimeZone(), false);
         event.setEventId(++eventId);
         event.setTitle("Event that carry over to the next day, show as ending midnight");
         event.setStartDate(today.plusHours(19));
@@ -76,11 +80,14 @@ public class MultidayEventTest extends InstrumentationTestCase {
         assertEquals("Tomorrow event entry end time is the same as for the event", entry2.getEvent().getEndDate(), entry2.getEndDate());
     }
 
-    /**  https://github.com/plusonelabs/calendar-widget/issues/184#issuecomment-142671469 */
+    /**
+     * https://github.com/plusonelabs/calendar-widget/issues/184#issuecomment-142671469
+     */
     public void testThreeDaysEvent() {
-        DateTime friday = new DateTime(2015, 9, 18, 0, 0);
+        DateTime friday = new DateTime(2015, 9, 18, 0, 0, 0, 0, provider.getSettings().getTimeZone());
         DateTime sunday = friday.plusDays(2);
-        CalendarEvent event = new CalendarEvent();
+        CalendarEvent event = new CalendarEvent(provider.getContext(), provider.getWidgetId(),
+                provider.getSettings().getTimeZone(), false);
         event.setEventId(++eventId);
         event.setTitle("Leader's weekend");
         event.setStartDate(friday.plusHours(19));
@@ -95,10 +102,10 @@ public class MultidayEventTest extends InstrumentationTestCase {
         CalendarEntry entry1 = getSundayEntryAt(event, currentDateTime);
         assertEquals(sunday, entry1.getStartDate());
         assertEquals(event.getEndDate(), entry1.getEndDate());
-        assertEquals(event.getTitle(), entry1.getTitle(provider.getContext()));
-        String details = entry1.getEventDetails(provider.getContext());
-        assertTrue(details, details.indexOf(ARROW) >= 0);
-        assertEquals(details, details.indexOf(ARROW), details.lastIndexOf(ARROW));
+        assertEquals(event.getTitle(), entry1.getTitle());
+        String timeString = entry1.getEventTimeString();
+        assertTrue(timeString, timeString.contains(ARROW));
+        assertEquals(timeString, timeString.indexOf(ARROW), timeString.lastIndexOf(ARROW));
     }
 
     private CalendarEntry getSundayEntryAt(CalendarEvent event, DateTime currentDateTime) {
@@ -112,7 +119,7 @@ public class MultidayEventTest extends InstrumentationTestCase {
         for (WidgetEntry item : factory.getWidgetEntries()) {
             if (item instanceof CalendarEntry) {
                 CalendarEntry entry = (CalendarEntry) item;
-                if ( entry.getStartDate().getDayOfMonth() == 20) {
+                if (entry.getStartDate().getDayOfMonth() == 20) {
                     assertNull(sundayEntry);
                     sundayEntry = entry;
                 }

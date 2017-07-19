@@ -2,15 +2,24 @@
 <resources>
 
     <string name="app_name">Calendar Widget</string>
+    <string name="widget_name">Calendar Widget</string>
+    <string name="widget_instance_name">Widget name</string>
+    <string name="yesterday">Yesterday</string>
     <string name="today">Today</string>
     <string name="tomorrow">Tomorrow</string>
     <string name="no_upcoming_events">No upcoming events</string>
-    <string name="widget_name">Calendar</string>
     <string name="open_prefs_desc">Open the settings of the calendar widget</string>
     <string name="add_event_desc">Add new calender event</string>
     <string name="indicator_alarm">Indicator if an alarm has been set</string>
     <string name="indicator_recurring">Indicator if the event is recurring</string>
     <string name="no_title">(No title)</string>
+    <string name="grant_permissions">Grant permissions</string>
+    <string name="grant_permissions_verbose">Widget requires permission to read calendars.\nTap here to grant permission.</string>
+    <string name="permissions_justification">Welcome to the Calendar Widget, the easy access to your calendar.\n\nTo make the most of the widget you need to grant it access to your calendar.</string>
+    <string name="no_widgets_found">Please add a \"Calendar Widget\" widget from the home screen of your device first.</string>
+    <string name="select_a_widget_to_configure">Select a widget to configure</string>
+    <string name="close">Close</string>
+    <string name="go_to_home_screen">Go to home screen</string>
 
     <!-- Preference header: Calendars -->
     <string name="calendars_prefs">Calendars</string>
@@ -26,6 +35,9 @@
     <string name="appearance_text_size_medium">Medium</string>
     <string name="appearance_text_size_large">Large</string>
     <string name="appearance_text_size_very_large">Very large</string>
+    <string name="pref_event_entry_layout_title">Event entry layout</string>
+    <string name="default_multiline_layout">Time below title</string>
+    <string name="single_line_layout">All in one row</string>
     <string name="appearance_multiline_title_title">Multiline title</string>
     <string name="appearance_multiline_title_desc">Spread event title over multiple lines</string>
     <string name="appearance_date_format_desc">Show time in am/pm or 24 hours format</string>
@@ -35,9 +47,13 @@
     <string name="appearance_date_format_12">5:00 pm</string>
     <string name="appearance_show_days_without_events_title">Show days without events</string>
     <string name="appearance_show_days_without_events_desc">Show day headers for days without events</string>
+    <string name="appearance_show_day_headers_title">Show day headers</string>
+    <string name="appearance_show_day_headers_desc">Show day headers at all</string>
     <string name="appearance_display_header_title">Show widget header</string>
     <string name="appearance_display_header_desc">Show the date and settings header</string>
-    <string name="appearance_display_header_warning">Hiding the header also stops you from getting back into the preferences.</string>
+    <string name="lock_time_zone_off_desc">Unlocked, current zone: %s</string>
+    <string name="lock_time_zone_on_desc">Locked at %s</string>
+    <string name="lock_time_zone_title">Lock time zone</string>
     <string name="appearance_group_color_title">Colors</string>
     <string name="appearance_background_color_title">Background color</string>
     <string name="appearance_background_color_desc">Adjust the color of the background</string>
@@ -56,6 +72,8 @@
     <string name="appearance_theme_dark">Light</string>
     <string name="appearance_theme_light">Dark</string>
     <string name="appearance_theme_white">Black</string>
+    <string name="appearance_abbreviate_dates_title">Abbreviate dates</string>
+    <string name="appearance_abbreviate_dates_desc">Use three-letter format for dates in Widget and Day headers etc.</string>
 
     <!-- Preference header: Event details -->
     <string name="event_details_prefs">Event details</string>
@@ -98,6 +116,7 @@
     <string name="ended_today">Ended today</string>
     <string name="ended_yesterday">Ended yesterday</string>
     <string name="pref_hide_based_on_keywords_title">Hide based on keywords in a title</string>
+    <string name="show_only_closest_instance_of_recurring_event">Show only the closest instance of a recurring event</string>
 
     <!-- Preference header: Feedback -->
     <string name="feedback_prefs">Feedback</string>

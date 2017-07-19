@@ -7,16 +7,16 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.CalendarContract.Attendees;
 import android.provider.CalendarContract.Instances;
-import android.util.Log;
+import android.support.annotation.NonNull;
+import android.util.SparseArray;
 
-import com.plusonelabs.calendar.BuildConfig;
 import com.plusonelabs.calendar.DateUtil;
-import com.plusonelabs.calendar.prefs.CalendarPreferences;
+import com.plusonelabs.calendar.prefs.InstanceSettings;
+import com.plusonelabs.calendar.util.PermissionsUtil;
 
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeConstants;
 import org.joda.time.DateTimeZone;
-import org.joda.time.LocalDateTime;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -40,43 +40,68 @@ public class CalendarEventProvider {
     private static final int COMPANY_COLOR = -21178;
 
     private final Context context;
+    private final int widgetId;
+
+    // Below are parameters, which may change in settings
+    private DateTimeZone zone;
     private KeywordsFilter mKeywordsFilter;
     private DateTime mStartOfTimeRange;
     private DateTime mEndOfTimeRange;
 
-    private enum ShowPastEventsWithColorEnum {
-        NONE,
-        SAME,
-        OTHER
-    }
-
-    /**
-     * This helps migrating to the "Calendar Widget" from "Jorte Calendar",
-     * where "[C]" title suffix means "Completed event"
-     */
-    private static final String PAST_EVENTS_TITLE_SUFFIX_TO_SKIP = "[C]";
-
-    public CalendarEventProvider(Context context) {
+    public CalendarEventProvider(Context context, int widgetId) {
         this.context = context;
+        this.widgetId = widgetId;
     }
 
     public List<CalendarEvent> getEvents() {
         initialiseParameters();
+        if (!PermissionsUtil.arePermissionsGranted(context)) {
+            return new ArrayList<>();
+        }
         List<CalendarEvent> eventList = getTimeFilteredEventList();
-        for (CalendarEvent event : getPastEventWithColorList()) {
+        if (getSettings().getShowPastEventsWithDefaultColor()) {
+            addPastEventsWithDefaultColor(eventList);
+        }
+        if (getSettings().getShowOnlyClosestInstanceOfRecurringEvent()) {
+            filterShowOnlyClosestInstanceOfRecurringEvent(eventList);
+        }
+        return eventList;
+    }
+
+    private void addPastEventsWithDefaultColor(List<CalendarEvent> eventList) {
+        for (CalendarEvent event : getPastEventsWithColorList()) {
             if (eventList.contains(event)) {
                 eventList.remove(event);
             }
             eventList.add(event);
         }
-        return eventList;
+    }
+
+    private void filterShowOnlyClosestInstanceOfRecurringEvent(@NonNull List<CalendarEvent> eventList) {
+        SparseArray<CalendarEvent> eventIds = new SparseArray<>();
+        List<CalendarEvent> toDelete = new ArrayList<>();
+        for (CalendarEvent event : eventList) {
+            CalendarEvent otherEvent = eventIds.get(event.getEventId());
+            if (otherEvent == null) {
+                eventIds.put(event.getEventId(), event);
+            } else if (Math.abs(event.getStartDate().getMillis() -
+                    DateUtil.now(zone).getMillis()) <
+                    Math.abs(otherEvent.getStartDate().getMillis() -
+                            DateUtil.now(zone).getMillis())) {
+                toDelete.add(otherEvent);
+                eventIds.put(event.getEventId(), event);
+            } else {
+                toDelete.add(event);
+            }
+        }
+        eventList.removeAll(toDelete);
     }
 
     private void initialiseParameters() {
-        mKeywordsFilter = new KeywordsFilter(CalendarPreferences.getHideBasedOnKeywords(context));
-        mStartOfTimeRange = CalendarPreferences.getEventsEnded(context)
-                .endedAt(DateUtil.now());
-        mEndOfTimeRange = getEndOfTimeRange(DateUtil.now());
+        zone = getSettings().getTimeZone();
+        mKeywordsFilter = new KeywordsFilter(getSettings().getHideBasedOnKeywords());
+        mStartOfTimeRange = getSettings().getEventsEnded().endedAt(DateUtil.now(zone));
+        mEndOfTimeRange = getEndOfTimeRange(DateUtil.now(zone));
     }
 
     public DateTime getEndOfTimeRange() {
@@ -88,10 +113,15 @@ public class CalendarEventProvider {
     }
 
     private DateTime getEndOfTimeRange(DateTime now) {
-        int dateRange = CalendarPreferences.getEventRange(context);
+        int dateRange = getSettings().getEventRange();
         return dateRange > 0
                 ? now.plusDays(dateRange)
                 : now.withTimeAtStartOfDay().plusDays(1);
+    }
+
+    @NonNull
+    private InstanceSettings getSettings() {
+        return InstanceSettings.fromId(context, widgetId);
     }
 
     private List<CalendarEvent> getTimeFilteredEventList() {
@@ -102,10 +132,10 @@ public class CalendarEventProvider {
         // Above filters are not exactly correct for AllDay events: for them that filter
         // time should be moved by a time zone... (i.e. by several hours)
         // This is why we need to do additional filtering after querying a Content Provider:
-        for(Iterator<CalendarEvent> it = eventList.iterator(); it.hasNext(); ) {
+        for (Iterator<CalendarEvent> it = eventList.iterator(); it.hasNext(); ) {
             CalendarEvent event = it.next();
             if (!event.getEndDate().isAfter(mStartOfTimeRange)
-                    || !mEndOfTimeRange.isAfter(event.getStartDate()) ) {
+                    || !mEndOfTimeRange.isAfter(event.getStartDate())) {
                 // We remove using Iterator to avoid ConcurrentModificationException
                 it.remove();
             }
@@ -114,7 +144,7 @@ public class CalendarEventProvider {
     }
 
     private String getCalendarSelection() {
-        Set<String> activeCalendars = CalendarPreferences.getActiveCalendars(context);
+        Set<String> activeCalendars = getSettings().getActiveCalendars();
         StringBuilder stringBuilder = new StringBuilder(EVENT_SELECTION);
         if (!activeCalendars.isEmpty()) {
             stringBuilder.append(AND_BRACKET);
@@ -135,7 +165,8 @@ public class CalendarEventProvider {
 
     private List<CalendarEvent> queryList(Uri uri, String selection) {
         List<CalendarEvent> eventList = new ArrayList<>();
-        CalendarQueryResult result = new CalendarQueryResult(uri, getProjection(), selection, null, EVENT_SORT_ORDER);
+        CalendarQueryResult result = new CalendarQueryResult(getSettings(), uri, getProjection(),
+                selection, null, EVENT_SORT_ORDER);
         Cursor cursor = null;
         try {
             cursor = context.getContentResolver().query(uri, getProjection(),
@@ -186,16 +217,13 @@ public class CalendarEventProvider {
         return columnNames.toArray(new String[columnNames.size()]);
     }
 
-    private List<CalendarEvent> getPastEventWithColorList() {
-        List<CalendarEvent> eventList = new ArrayList<>();
-        if (CalendarPreferences.getShowPastEventsWithDefaultColor(context)) {
-            Uri.Builder builder = Instances.CONTENT_URI.buildUpon();
-            ContentUris.appendId(builder, 0);
-            ContentUris.appendId(builder, DateUtil.now().getMillis());
-            eventList = queryList(builder.build(), getPastEventsWithColorSelection());
-            for (CalendarEvent event : eventList) {
-                event.setDefaultCalendarColor();
-            }
+    private List<CalendarEvent> getPastEventsWithColorList() {
+        Uri.Builder builder = Instances.CONTENT_URI.buildUpon();
+        ContentUris.appendId(builder, 0);
+        ContentUris.appendId(builder, DateUtil.now(zone).getMillis());
+        List<CalendarEvent> eventList = queryList(builder.build(), getPastEventsWithColorSelection());
+        for (CalendarEvent event : eventList) {
+            event.setDefaultCalendarColor();
         }
         return eventList;
     }
@@ -217,19 +245,16 @@ public class CalendarEventProvider {
     }
 
     private CalendarEvent createCalendarEvent(Cursor cursor) {
-        CalendarEvent event = new CalendarEvent();
+        boolean allDay = cursor.getInt(cursor.getColumnIndex(Instances.ALL_DAY)) > 0;
+        CalendarEvent event = new CalendarEvent(context, widgetId, zone, allDay);
         event.setEventId(cursor.getInt(cursor.getColumnIndex(Instances.EVENT_ID)));
         event.setTitle(cursor.getString(cursor.getColumnIndex(Instances.TITLE)));
-        event.setStartDate(new DateTime(cursor.getLong(cursor.getColumnIndex(Instances.BEGIN))));
-        event.setEndDate(new DateTime(cursor.getLong(cursor.getColumnIndex(Instances.END))));
-        event.setAllDay(cursor.getInt(cursor.getColumnIndex(Instances.ALL_DAY)) > 0);
+        event.setStartMillis(cursor.getLong(cursor.getColumnIndex(Instances.BEGIN)));
+        event.setEndMillis(cursor.getLong(cursor.getColumnIndex(Instances.END)));
         event.setLocation(cursor.getString(cursor.getColumnIndex(Instances.EVENT_LOCATION)));
         event.setAlarmActive(cursor.getInt(cursor.getColumnIndex(Instances.HAS_ALARM)) > 0);
         event.setRecurring(cursor.getString(cursor.getColumnIndex(Instances.RRULE)) != null);
         event.setColor(getAsOpaque(getEventColor(cursor)));
-        if (event.isAllDay()) {
-            fixAllDayEvent(event);
-        }
         return event;
     }
 

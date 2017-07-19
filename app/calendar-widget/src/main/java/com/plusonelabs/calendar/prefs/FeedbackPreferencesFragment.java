@@ -10,20 +10,21 @@ import com.plusonelabs.calendar.calendar.CalendarQueryResultsStorage;
 
 public class FeedbackPreferencesFragment extends PreferenceFragment {
 
-	@Override
-	public boolean onPreferenceTreeClick(PreferenceScreen preferenceScreen, Preference preference) {
-		switch (preference.getKey()) {
-            case CalendarPreferences.KEY_SHARE_EVENTS_FOR_DEBUGGING:
-                CalendarQueryResultsStorage.shareEventsForDebugging(getActivity());
-			default:
-				break;
-		}
-		return super.onPreferenceTreeClick(preferenceScreen, preference);
-	}
+    @Override
+    public boolean onPreferenceTreeClick(PreferenceScreen preferenceScreen, Preference preference) {
+        switch (preference.getKey()) {
+            case ApplicationPreferences.KEY_SHARE_EVENTS_FOR_DEBUGGING:
+                CalendarQueryResultsStorage.shareEventsForDebugging(getActivity(),
+                        ApplicationPreferences.getWidgetId(getActivity()));
+            default:
+                break;
+        }
+        return super.onPreferenceTreeClick(preferenceScreen, preference);
+    }
 
-	@Override
-	public void onCreate(Bundle savedInstanceState) {
-		super.onCreate(savedInstanceState);
-		addPreferencesFromResource(R.xml.preferences_feedback);
-	}
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        addPreferencesFromResource(R.xml.preferences_feedback);
+    }
 }

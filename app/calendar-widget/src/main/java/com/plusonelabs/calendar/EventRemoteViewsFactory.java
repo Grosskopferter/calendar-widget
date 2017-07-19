@@ -2,16 +2,15 @@ package com.plusonelabs.calendar;
 
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.graphics.Color;
-import android.preference.PreferenceManager;
+import android.support.annotation.NonNull;
 import android.util.Log;
 import android.widget.RemoteViews;
 import android.widget.RemoteViewsService.RemoteViewsFactory;
 
 import com.plusonelabs.calendar.calendar.CalendarEventVisualizer;
+import com.plusonelabs.calendar.prefs.InstanceSettings;
 import com.plusonelabs.calendar.widget.DayHeader;
-import com.plusonelabs.calendar.prefs.CalendarPreferences;
 import com.plusonelabs.calendar.widget.WidgetEntry;
 
 import org.joda.time.DateTime;
@@ -20,81 +19,83 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-import static com.plusonelabs.calendar.CalendarIntentUtil.createOpenCalendarAtDayIntent;
-import static com.plusonelabs.calendar.CalendarIntentUtil.createOpenCalendarEventPendingIntent;
-import static com.plusonelabs.calendar.RemoteViewsUtil.setBackgroundColor;
-import static com.plusonelabs.calendar.RemoteViewsUtil.setBackgroundColorFromAttr;
-import static com.plusonelabs.calendar.RemoteViewsUtil.setPadding;
-import static com.plusonelabs.calendar.RemoteViewsUtil.setTextColorFromAttr;
-import static com.plusonelabs.calendar.RemoteViewsUtil.setTextSize;
-import static com.plusonelabs.calendar.Theme.getCurrentThemeId;
-import static com.plusonelabs.calendar.prefs.CalendarPreferences.PREF_DAY_HEADER_ALIGNMENT;
-import static com.plusonelabs.calendar.prefs.CalendarPreferences.PREF_DAY_HEADER_ALIGNMENT_DEFAULT;
-import static com.plusonelabs.calendar.prefs.CalendarPreferences.PREF_ENTRY_THEME;
-import static com.plusonelabs.calendar.prefs.CalendarPreferences.PREF_ENTRY_THEME_DEFAULT;
+import static com.plusonelabs.calendar.CalendarIntentUtil.*;
+import static com.plusonelabs.calendar.RemoteViewsUtil.*;
+import static com.plusonelabs.calendar.Theme.themeNameToResId;
 
 public class EventRemoteViewsFactory implements RemoteViewsFactory {
 
-	private final Context context;
-	private volatile List<WidgetEntry> mWidgetEntries = new ArrayList<>();
-	private final List<IEventVisualizer<?>> eventProviders;
+    private final Context context;
+    private final int widgetId;
+    private volatile List<WidgetEntry> mWidgetEntries = new ArrayList<>();
+    private final List<IEventVisualizer<?>> eventProviders;
 
-	public EventRemoteViewsFactory(Context context) {
-		this.context = context;
+    public EventRemoteViewsFactory(Context context, int widgetId) {
+        this.context = context;
+        this.widgetId = widgetId;
         eventProviders = new ArrayList<>();
-        eventProviders.add(new CalendarEventVisualizer(context));
+        eventProviders.add(new CalendarEventVisualizer(context, widgetId));
     }
 
     public void onCreate() {
-		RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.widget);
-		rv.setPendingIntentTemplate(R.id.event_list, createOpenCalendarEventPendingIntent(context));
-	}
+        RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.widget);
+        rv.setPendingIntentTemplate(R.id.event_list, createOpenCalendarEventPendingIntent(getSettings()));
+    }
 
-	public void onDestroy() {
-		// Empty
-	}
+    public void onDestroy() {
+        // Empty
+    }
 
-	public int getCount() {
-		return mWidgetEntries.size();
-	}
+    public int getCount() {
+        return mWidgetEntries.size();
+    }
 
-	public RemoteViews getViewAt(int position) {
+    public RemoteViews getViewAt(int position) {
         List<WidgetEntry> widgetEntries = mWidgetEntries;
-		if (position < widgetEntries.size()) {
+        if (position < widgetEntries.size()) {
             WidgetEntry entry = widgetEntries.get(position);
-			if (entry instanceof DayHeader) {
-				return getRemoteView((DayHeader) entry);
-			}
+            if (entry instanceof DayHeader) {
+                return getRemoteView((DayHeader) entry);
+            }
             for (IEventVisualizer<?> eventProvider : eventProviders) {
                 if (entry.getClass().isAssignableFrom(eventProvider.getSupportedEventEntryType())) {
                     return eventProvider.getRemoteView(entry);
                 }
             }
-		}
-		return null;
-	}
+        }
+        return null;
+    }
 
-	private RemoteViews getRemoteView(DayHeader dayHeader) {
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        String alignment = prefs.getString(PREF_DAY_HEADER_ALIGNMENT, PREF_DAY_HEADER_ALIGNMENT_DEFAULT);
+    private RemoteViews getRemoteView(DayHeader dayHeader) {
+        String alignment = getSettings().getDayHeaderAlignment();
         RemoteViews rv = new RemoteViews(context.getPackageName(), Alignment.valueOf(alignment).getLayoutId());
-        String dateString = DateUtil.createDateString(context, dayHeader.getStartDate())
+        String dateString = DateUtil.createDayHeaderTitle(getSettings(), dayHeader.getStartDate())
                 .toUpperCase(Locale.getDefault());
         rv.setTextViewText(R.id.day_header_title, dateString);
-        setTextSize(context, rv, R.id.day_header_title, R.dimen.day_header_title);
+        setTextSize(getSettings(), rv, R.id.day_header_title, R.dimen.day_header_title);
         setTextColorFromAttr(context, rv, R.id.day_header_title, R.attr.dayHeaderTitle);
         setBackgroundColor(rv, R.id.day_header,
-                dayHeader.getStartDay().plusDays(1).isBefore(DateUtil.now()) ? CalendarPreferences.getPastEventsBackgroundColor(context) : Color.TRANSPARENT);
+                dayHeader.getStartDay().plusDays(1).isBefore(DateUtil.now(getSettings().getTimeZone())) ?
+                        getSettings().getPastEventsBackgroundColor() : Color.TRANSPARENT);
         setBackgroundColorFromAttr(context, rv, R.id.day_header_separator, R.attr.dayHeaderSeparator);
-        setPadding(context, rv, R.id.day_header_title, 0, R.dimen.day_header_padding_top, R.dimen.day_header_padding_right, R.dimen.day_header_padding_bottom);
-		Intent intent = createOpenCalendarAtDayIntent(dayHeader.getStartDate());
-		rv.setOnClickFillInIntent(R.id.day_header, intent);
-		return rv;
-	}
+        setPadding(getSettings(), rv, R.id.day_header_title, 0, R.dimen.day_header_padding_top,
+                R.dimen.day_header_padding_right, R.dimen.day_header_padding_bottom);
+        Intent intent = createOpenCalendarAtDayIntent(dayHeader.getStartDate());
+        rv.setOnClickFillInIntent(R.id.day_header, intent);
+        return rv;
+    }
+
+    @NonNull
+    private InstanceSettings getSettings() {
+        return InstanceSettings.fromId(context, widgetId);
+    }
 
     public void onDataSetChanged() {
-        context.setTheme(getCurrentThemeId(context, PREF_ENTRY_THEME, PREF_ENTRY_THEME_DEFAULT));
-        mWidgetEntries = addDayHeaders(getEventEntries());
+        context.setTheme(themeNameToResId(getSettings().getEntryTheme()));
+        if (getSettings().getShowDayHeaders())
+            mWidgetEntries = addDayHeaders(getEventEntries());
+        else
+            mWidgetEntries = getEventEntries();
     }
 
     private List<WidgetEntry> getEventEntries() {
@@ -108,8 +109,8 @@ public class EventRemoteViewsFactory implements RemoteViewsFactory {
     private List<WidgetEntry> addDayHeaders(List<WidgetEntry> listIn) {
         List<WidgetEntry> listOut = new ArrayList<>();
         if (!listIn.isEmpty()) {
-            boolean showDaysWithoutEvents = CalendarPreferences.getShowDaysWithoutEvents(context);
-            DayHeader curDayBucket = new DayHeader(new DateTime(0));
+            boolean showDaysWithoutEvents = getSettings().getShowDaysWithoutEvents();
+            DayHeader curDayBucket = new DayHeader(new DateTime(0, getSettings().getTimeZone()));
             for (WidgetEntry entry : listIn) {
                 DateTime nextStartOfDay = entry.getStartDay();
                 if (!nextStartOfDay.isEqual(curDayBucket.getStartDay())) {
@@ -126,7 +127,7 @@ public class EventRemoteViewsFactory implements RemoteViewsFactory {
     }
 
     public void logWidgetEntries(String tag) {
-        for (int ind=0; ind < getWidgetEntries().size(); ind++) {
+        for (int ind = 0; ind < getWidgetEntries().size(); ind++) {
             WidgetEntry widgetEntry = getWidgetEntries().get(ind);
             Log.v(tag, String.format("%02d ", ind) + widgetEntry.toString());
         }
@@ -138,7 +139,7 @@ public class EventRemoteViewsFactory implements RemoteViewsFactory {
 
     private void addEmptyDayHeadersBetweenTwoDays(List<WidgetEntry> entries, DateTime fromDayExclusive, DateTime toDayExclusive) {
         DateTime emptyDay = fromDayExclusive.plusDays(1);
-        DateTime today = DateUtil.now().withTimeAtStartOfDay();
+        DateTime today = DateUtil.now(getSettings().getTimeZone()).withTimeAtStartOfDay();
         if (emptyDay.isBefore(today)) {
             emptyDay = today;
         }
@@ -148,24 +149,24 @@ public class EventRemoteViewsFactory implements RemoteViewsFactory {
         }
     }
 
-	public RemoteViews getLoadingView() {
+    public RemoteViews getLoadingView() {
         return null;
-	}
+    }
 
-	public int getViewTypeCount() {
-		int result = 3; // we have 3 because of the "left", "right" and "center" day headers
+    public int getViewTypeCount() {
+        int result = 3; // we have 3 because of the "left", "right" and "center" day headers
         for (IEventVisualizer<?> eventProvider : eventProviders) {
             result += eventProvider.getViewTypeCount();
         }
-		return result;
-	}
+        return result;
+    }
 
-	public long getItemId(int position) {
-		return position;
-	}
+    public long getItemId(int position) {
+        return position;
+    }
 
-	public boolean hasStableIds() {
-		return true;
-	}
+    public boolean hasStableIds() {
+        return true;
+    }
 
 }

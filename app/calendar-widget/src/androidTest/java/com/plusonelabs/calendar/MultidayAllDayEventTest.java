@@ -5,9 +5,8 @@ import android.util.Log;
 
 import com.plusonelabs.calendar.calendar.CalendarQueryResultsStorage;
 import com.plusonelabs.calendar.calendar.MockCalendarContentProvider;
+import com.plusonelabs.calendar.prefs.ApplicationPreferences;
 import com.plusonelabs.calendar.widget.DayHeader;
-import com.plusonelabs.calendar.prefs.CalendarPreferences;
-import com.plusonelabs.calendar.util.RawResourceUtils;
 import com.plusonelabs.calendar.widget.WidgetEntry;
 
 import org.joda.time.DateTime;
@@ -19,6 +18,7 @@ import java.io.IOException;
  * @author yvolk@yurivolkov.com
  */
 public class MultidayAllDayEventTest extends InstrumentationTestCase {
+
     private static final String TAG = MultidayAllDayEventTest.class.getSimpleName();
 
     private MockCalendarContentProvider provider = null;
@@ -28,7 +28,7 @@ public class MultidayAllDayEventTest extends InstrumentationTestCase {
     protected void setUp() throws Exception {
         super.setUp();
         provider = MockCalendarContentProvider.getContentProvider(this);
-        factory = new EventRemoteViewsFactory(provider.getContext());
+        factory = new EventRemoteViewsFactory(provider.getContext(), provider.getWidgetId());
     }
 
     @Override
@@ -39,24 +39,24 @@ public class MultidayAllDayEventTest extends InstrumentationTestCase {
 
     public void testInsidePeriod() throws IOException, JSONException {
         final String method = "testInsidePeriod";
-        CalendarQueryResultsStorage inputs = CalendarQueryResultsStorage.fromJsonString(
-                provider.getContext(),
-                RawResourceUtils.getString(this.getInstrumentation().getContext(),
-                        com.plusonelabs.calendar.tests.R.raw.multi_day)
-        );
+        CalendarQueryResultsStorage inputs = provider.loadResults(this.getInstrumentation().getContext(),
+                com.plusonelabs.calendar.tests.R.raw.multi_day);
         provider.addResults(inputs.getResults());
 
         int dateRange = 30;
-        CalendarPreferences.setEventRange(provider.getContext(), dateRange);
-        DateTime now = new DateTime(2015, 8, 30, 0, 0, 0);
+        provider.startEditing();
+        ApplicationPreferences.setEventRange(provider.getContext(), dateRange);
+        provider.saveSettings();
+        DateTime now = new DateTime(2015, 8, 30, 0, 0, 1, 0, provider.getSettings().getTimeZone());
         DateUtil.setNow(now);
         factory.onDataSetChanged();
+        factory.logWidgetEntries(method);
 
         DateTime today = now.withTimeAtStartOfDay();
         DateTime endOfRangeTime = today.plusDays(dateRange);
         int dayOfEventEntryPrev = 0;
         int dayOfHeaderPrev = 0;
-        for (int ind=0; ind < factory.getWidgetEntries().size(); ind++) {
+        for (int ind = 0; ind < factory.getWidgetEntries().size(); ind++) {
             WidgetEntry entry = factory.getWidgetEntries().get(ind);
             String logMsg = method + "; " + String.format("%02d ", ind) + entry.toString();
             Log.v(TAG, logMsg);
@@ -87,7 +87,7 @@ public class MultidayAllDayEventTest extends InstrumentationTestCase {
                 dayOfEventEntryPrev = dayOfEntry;
             }
         }
-        assertEquals("No last header " + method, endOfRangeTime.getDayOfYear() - 1, dayOfHeaderPrev);
-        assertEquals("Last day not filled " + method, endOfRangeTime.getDayOfYear() - 1, dayOfEventEntryPrev);
+        assertEquals("Wrong last day header " + method, endOfRangeTime.getDayOfYear(), dayOfHeaderPrev);
+        assertEquals("Wrong last filled day " + method, endOfRangeTime.getDayOfYear(), dayOfEventEntryPrev);
     }
 }

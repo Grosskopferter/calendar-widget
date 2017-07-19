@@ -6,7 +6,6 @@ import android.provider.CalendarContract;
 import android.test.InstrumentationTestCase;
 
 import com.plusonelabs.calendar.DateUtil;
-import com.plusonelabs.calendar.util.RawResourceUtils;
 
 import org.joda.time.DateTime;
 import org.json.JSONException;
@@ -16,9 +15,11 @@ import java.io.IOException;
 
 /**
  * Tests of the Testing framework itself
+ *
  * @author yvolk@yurivolkov.com
  */
 public class MockCalendarContentProviderTest extends InstrumentationTestCase {
+
     private MockCalendarContentProvider provider = null;
     private final String[] projection = CalendarEventProvider.getProjection();
     private final String sortOrder = CalendarEventProvider.EVENT_SORT_ORDER;
@@ -62,21 +63,21 @@ public class MockCalendarContentProviderTest extends InstrumentationTestCase {
     }
 
     private CalendarQueryResult addOneResult(String selection) {
-        CalendarQueryResult input = new CalendarQueryResult(
+        CalendarQueryResult input = new CalendarQueryResult(provider.getSettings(),
                 CalendarContract.Instances.CONTENT_URI, projection, selection, null, sortOrder);
-        DateTime today = DateUtil.now().withTimeAtStartOfDay();
+        DateTime today = DateUtil.now(provider.getSettings().getTimeZone()).withTimeAtStartOfDay();
         input.addRow(new CalendarQueryRow().setEventId(++eventId)
                 .setTitle("First Event today").setBegin(today.plusHours(8).getMillis()));
         input.addRow(new CalendarQueryRow()
-                        .setEventId(++eventId)
-                        .setTitle("Event with all known attributes")
-                        .setBegin(today.plusHours(12).getMillis())
-                        .setEnd(today.plusHours(13).getMillis())
-                        .setDisplayColor(0xFF00FF)
-                        .setAllDay(false)
-                        .setEventLocation("somewhere")
-                        .setHasAlarm(true)
-                        .setRRule("what's this?")
+                .setEventId(++eventId)
+                .setTitle("Event with all known attributes")
+                .setBegin(today.plusHours(12).getMillis())
+                .setEnd(today.plusHours(13).getMillis())
+                .setDisplayColor(0xFF00FF)
+                .setAllDay(false)
+                .setEventLocation("somewhere")
+                .setHasAlarm(true)
+                .setRRule("what's this?")
         );
         assertEquals(CalendarContract.Instances.CONTENT_URI, input.getUri());
         assertEquals(selection, input.getSelection());
@@ -85,7 +86,8 @@ public class MockCalendarContentProviderTest extends InstrumentationTestCase {
     }
 
     private CalendarQueryResult queryList(Uri uri, String selection) {
-        CalendarQueryResult result = new CalendarQueryResult(uri, projection, selection, null, sortOrder);
+        CalendarQueryResult result = new CalendarQueryResult(provider.getSettings(),
+                uri, projection, selection, null, sortOrder);
         Cursor cursor = null;
         try {
             cursor = provider.getContext().getContentResolver().query(uri, projection,
@@ -108,12 +110,9 @@ public class MockCalendarContentProviderTest extends InstrumentationTestCase {
     }
 
     public void testJsonToAndFrom() throws IOException, JSONException {
-        String jsonInputString =
-                RawResourceUtils.getString(getInstrumentation().getContext(),
-                        com.plusonelabs.calendar.tests.R.raw.birthday);
-        CalendarQueryResultsStorage inputs1 =
-                CalendarQueryResultsStorage.fromJsonString(provider.getContext(), jsonInputString);
-        JSONObject jsonOutput = inputs1.toJson(provider.getContext());
+        CalendarQueryResultsStorage inputs1 = provider.loadResults(getInstrumentation().getContext(),
+                com.plusonelabs.calendar.tests.R.raw.birthday);
+        JSONObject jsonOutput = inputs1.toJson(provider.getContext(), provider.getWidgetId());
         CalendarQueryResultsStorage inputs2 =
                 CalendarQueryResultsStorage.fromJson(provider.getContext(), jsonOutput);
         assertEquals(inputs1, inputs2);
