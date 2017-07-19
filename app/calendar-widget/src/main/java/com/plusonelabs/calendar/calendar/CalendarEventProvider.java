@@ -8,8 +8,10 @@ import android.os.Build;
 import android.provider.CalendarContract.Attendees;
 import android.provider.CalendarContract.Instances;
 import android.support.annotation.NonNull;
+import android.util.Log;
 import android.util.SparseArray;
 
+import com.plusonelabs.calendar.BuildConfig;
 import com.plusonelabs.calendar.DateUtil;
 import com.plusonelabs.calendar.prefs.InstanceSettings;
 import com.plusonelabs.calendar.util.PermissionsUtil;
@@ -17,6 +19,7 @@ import com.plusonelabs.calendar.util.PermissionsUtil;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeConstants;
 import org.joda.time.DateTimeZone;
+import org.joda.time.LocalDateTime;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -178,7 +181,7 @@ public class CalendarEventProvider {
                         result.addRow(cursor);
                     }
                     CalendarEvent event = createCalendarEvent(cursor);
-                    if (!isWeptunEventOnWeekend(event)) {
+                    if (!isFilteredOutCompanyEvent(event)) {
                         if (!eventList.contains(event) && !mKeywordsFilter.matched(event.getTitle())) {
                             eventList.add(event);
                         }
@@ -194,9 +197,25 @@ public class CalendarEventProvider {
         return eventList;
     }
 
-    private boolean isWeptunEventOnWeekend(CalendarEvent event) {
-        return event.getColor() == COMPANY_COLOR && isWeekend();
+    private boolean isFilteredOutCompanyEvent(CalendarEvent event) {
+        return event.getColor() == COMPANY_COLOR && isOffWorkTime();
     }
+
+    private boolean isOffWorkTime() {
+        DateTime now = new DateTime();
+        return isWeekend(now) || isNightTime(now);
+    }
+
+    private boolean isWeekend(DateTime now) {
+        return now.getDayOfWeek() == DateTimeConstants.SUNDAY || now.getDayOfWeek() == DateTimeConstants.SATURDAY
+                || (now.getDayOfWeek() == DateTimeConstants.FRIDAY && now.getHourOfDay() > 17);
+    }
+
+    private boolean isNightTime(DateTime now) {
+        return now.getHourOfDay() <= 6 || now.getHourOfDay() >= 18 ||
+                (now.getHourOfDay() == 7 && now.getMinuteOfHour() < 45);
+    }
+
 
     public static String[] getProjection() {
         List<String> columnNames = new ArrayList<>();
@@ -258,12 +277,6 @@ public class CalendarEventProvider {
         return event;
     }
 
-
-    private boolean isWeekend() {
-        DateTime now = new DateTime();
-        return now.getDayOfWeek() == DateTimeConstants.SUNDAY || now.getDayOfWeek() == DateTimeConstants.SATURDAY
-                || (now.getDayOfWeek() == DateTimeConstants.FRIDAY && now.getHourOfDay() > 17);
-    }
 
     private void fixAllDayEvent(CalendarEvent event) {
         event.setStartDate(fixTimeOfAllDayEvent(event.getStartDate()));
