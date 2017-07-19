@@ -10,7 +10,9 @@ import android.widget.RemoteViews;
 import com.plusonelabs.calendar.R;
 import com.plusonelabs.calendar.RemoteViewsUtil;
 
-import static com.plusonelabs.calendar.RemoteViewsUtil.*;
+import static com.plusonelabs.calendar.RemoteViewsUtil.setMultiline;
+import static com.plusonelabs.calendar.RemoteViewsUtil.setTextColorFromAttr;
+import static com.plusonelabs.calendar.RemoteViewsUtil.setTextSize;
 
 /**
  * @author yvolk@yurivolkov.com
