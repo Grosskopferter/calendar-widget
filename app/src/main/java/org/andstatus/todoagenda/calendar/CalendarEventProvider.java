@@ -20,6 +20,7 @@ import org.andstatus.todoagenda.util.CalendarIntentUtil;
 import org.andstatus.todoagenda.util.IntentUtil;
 import org.andstatus.todoagenda.util.MyClock;
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeConstants;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,8 +42,29 @@ public class CalendarEventProvider extends EventProvider {
     private static final String EVENT_SELECTION = Instances.SELF_ATTENDEE_STATUS + "!="
             + Attendees.ATTENDEE_STATUS_DECLINED;
 
+    private static final int COMPANY_COLOR = -21178;
+
     public CalendarEventProvider(EventProviderType type, Context context, int widgetId) {
         super(type, context, widgetId);
+    }
+
+    private boolean isFilteredOutCompanyEvent(CalendarEvent event) {
+        return event.getColor() == COMPANY_COLOR && isOffWorkTime();
+    }
+
+    private boolean isOffWorkTime() {
+        DateTime now = new DateTime();
+        return isWeekend(now) || isNightTime(now);
+    }
+
+    private boolean isWeekend(DateTime now) {
+        return now.getDayOfWeek() == DateTimeConstants.SUNDAY || now.getDayOfWeek() == DateTimeConstants.SATURDAY
+                || (now.getDayOfWeek() == DateTimeConstants.FRIDAY && now.getHourOfDay() > 17);
+    }
+
+    private boolean isNightTime(DateTime now) {
+        return now.getHourOfDay() <= 6 || now.getHourOfDay() >= 18 ||
+                (now.getHourOfDay() == 7 && now.getMinuteOfHour() < 45);
     }
 
     List<CalendarEvent> queryEvents() {
@@ -60,6 +82,18 @@ public class CalendarEventProvider extends EventProvider {
         if (getSettings().getFilterMode() != FilterMode.NO_FILTERING) {
             if (getSettings().getShowOnlyClosestInstanceOfRecurringEvent()) {
                 filterShowOnlyClosestInstanceOfRecurringEvent(eventList);
+            }
+        }
+
+        return filterOutWorkEvents(eventList);
+    }
+
+    private List<CalendarEvent> filterOutWorkEvents(List<CalendarEvent> eventList) {
+        Iterator<CalendarEvent> iterator = eventList.iterator();
+        while (iterator.hasNext()) {
+            CalendarEvent event = iterator.next();
+            if (isFilteredOutCompanyEvent(event)) {
+                iterator.remove();
             }
         }
         return eventList;
@@ -182,20 +216,20 @@ public class CalendarEventProvider extends EventProvider {
         ContentUris.appendId(builder, 0);
         ContentUris.appendId(builder, getSettings().clock().now().getMillis());
         return queryList(builder.build(), getPastEventsWithColorSelection()).stream()
-            .filter(ev -> getSettings().getFilterMode() != FilterMode.DEBUG_FILTER || ev.hasDefaultCalendarColor())
-            .collect(Collectors.toList());
+                .filter(ev -> getSettings().getFilterMode() != FilterMode.DEBUG_FILTER || ev.hasDefaultCalendarColor())
+                .collect(Collectors.toList());
     }
 
     private String getPastEventsWithColorSelection() {
         return getCalendarSelection() +
-            AND_BRACKET +
+                AND_BRACKET +
                 Instances.DISPLAY_COLOR + EQUALS + Instances.CALENDAR_COLOR +
-            CLOSING_BRACKET;
+                CLOSING_BRACKET;
     }
 
     private CalendarEvent newCalendarEvent(Cursor cursor) {
         OrderedEventSource source = getSettings()
-            .getActiveEventSource(type, cursor.getInt(cursor.getColumnIndex(Instances.CALENDAR_ID)));
+                .getActiveEventSource(type, cursor.getInt(cursor.getColumnIndex(Instances.CALENDAR_ID)));
 
         boolean allDay = cursor.getInt(cursor.getColumnIndex(Instances.ALL_DAY)) > 0;
         CalendarEvent event = new CalendarEvent(getSettings(), context, widgetId, allDay);
