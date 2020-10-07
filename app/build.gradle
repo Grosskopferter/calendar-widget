@@ -37,17 +37,17 @@ android {
         abortOnError false
     }
 
-    if (project.hasProperty('todoagendaStoreFile')) {
+//    if (project.hasProperty('todoagendaStoreFile')) {
         signingConfigs {
             releaseConfig {
-                storeFile file(todoagendaStoreFile)
-                storePassword todoagendaStorePassword
-                keyAlias todoagendaKeyAlias
-                keyPassword todoagendaKeyPassword
+                storeFile file("todoagenda.keystore")
+                storePassword TodoAgendaPW
+                keyAlias "alias_name"
+                keyPassword TodoAgendaPW
             }
         }
         buildTypes.release.signingConfig signingConfigs.releaseConfig
-    }
+//    }
     // See https://www.timroes.de/2013/09/22/handling-signing-configs-with-gradle/
     if (project.hasProperty("todoagenda.signing")
             && new File(project.property("todoagenda.signing").toString() + ".gradle").exists()) {
